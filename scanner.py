@@ -24,3 +24,31 @@ class WebSecScanner:
         self.session = requests.Session()
 
         colorama.init()
+
+    def normalize_url(self, url:str) -> str:
+        """Normalize the url to prevent duplicate checks"""
+        parsed = urllib.parse.urlparse(url)
+        return f"{parsed.scheme}://{parsed.netloc}{parsed.path}"
+    
+    def crawl(self, url: str, depth: int = 0) -> None:
+        """
+        so this function here will discover pages and URLs in
+        a given target application.
+        """
+        if depth > self.max_depth or url in self.visited_urls:
+            return
+        
+        try:
+            self.visited_urls.add(url)
+            response = self.session.get(url)
+            soup = BeautifulSoup(response.text, 'html.parser')
+
+            links = soup.find_all('a',href = True)
+            for link in links:
+                next_url = urllib.parse.urljoin(url ,link['href'])
+                if next_url.startswith(self.target_url):
+                    self.crawl(next_url,depth+1)
+        except Exception as e:
+            print(f"Error crawling {url}: {str(e)}")
+        
+        
