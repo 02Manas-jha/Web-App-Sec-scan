@@ -86,6 +86,97 @@ class WebSecScanner:
         common SQL injection payloads and looking for error messages that might
         hint a security vulnerability"""
 
-    
+    def check_xss(self, url:str) -> None:
+        """Test for potential Cross-site scripting vulnerabilities"""
+        xss_payload = [
+            "<script>alert('XSS')</script>",
+            "<img src=x onerror=alert('XSS')>",
+            "javascript:alert('XSS')"
+        ]
 
-        
+        for payload in xss_payload:
+            try:
+                parsed = urllib.parse.urlparse(url)
+                params = urllib.parse.parse_qs(parsed.query)
+
+                for param in params:
+                    test_url = url.replace(f"{param}={params[param[0]]}", f"{param} = {urllib.parse.quote(payload)}")
+                    response = self.session.get(test_url)
+
+                    if payload in response.text:
+                        self.report_vulnerability({
+                            'type':'Cross-Site Scripting (XSS)',
+                            'url':url,
+                            'parameter':param,
+                            'payload':payload
+                        })
+            except Exception as e:
+                print(f"Error testing XSS on {url}: {str(e)}")
+        """Here we use a set of common XSS payloads and applies the same idea.
+        But the key difference here is that we are looking for our injected payload
+        to appear unmodified in our response rather than looking for an error message.""" 
+       
+    def check_pii(self, url:str) -> None:
+        """Check for exposed sensitive information"""
+        sensitive_patterns = {
+            'email': r'[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}',
+            'phone': r'\b\d{3}[-.]?\d{3}[-.]?\d{4}\b',
+            'ssn': r'\b\d{3}-\d{2}-\d{4}\b',
+            'api_key': r'api[_-]?key[_-]?([\'"|`])([a-zA-Z0-9]{32,45})\1'
+        }
+        try:
+            response = self.session.get(url)
+
+            for info_type, pattern in sensitive_patterns.items():
+                matches = re.finditer(pattern, response.text)
+                for match in matches:
+                    self.report_vulnerability({
+                        'type':'Sensitive Information Exposure',
+                        'url':url,
+                        'info_type':info_type,
+                        'pattern':pattern
+                    })
+        except Exception as e:
+            print(f"Error checking sensitive information on {url}: {str(e)}")
+        """This function uses a set of predefined Regex patterns to
+        search for PII like emails, phone numbers, SSNs and API keys."""
+    
+    def scan(self) -> List[Dict]:
+        """
+        Main scanning method that coordinates the security checks
+
+        Returns:
+            List of discovered vulnerabilities
+        """
+        print(f"n{colorama.Fore.BLUE}Starting security scan of {self.target_url}{colorama.Style.RESET_ALL}\n")
+
+        self.crawl(self.target_url)
+
+        with ThreadPoolExecutor(max_workers=5) as executor:
+            for url in self.visited_urls:
+                executor.submit(self.check_sql_injec, url)
+                executor.submit(self.check_xss,url)
+                executor.submit(self.check_pii, url)
+        return self.vulnerabilities
+    
+    def report_vulnerability(self, vulnerability: Dict) -> None:
+        """Record and display found vulnerabilities"""
+        self.vulnerabilities.append(vulnerability)
+        print(f"{colorama.Fore.RED}[VULNERABILITY FOUND]{colorama.Style.RESET_ALL}")
+        for key, value in vulnerability.items():
+            print(f"{key}:{value}")
+        print()
+
+
+if __name__ == "__main__":
+    if len(sys.argv) != 2:
+        print("Usage: python scanner.py <target_url>")
+        sys.exit(1)
+    
+    target_url = sys.argv[1]
+    scanner = WebSecScanner(target_url)
+    vulnerabilities = scanner.scan()
+
+    print(f"\n{colorama.Fore.GREEN}Scan Complete!{colorama.Style.RESET_ALL}")
+    print(f"Total URLs scanned: {len(scanner.visited_urls)}")
+    print(f"Vulnerabilities found: {len(vulnerabilities)}")
