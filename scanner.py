@@ -52,3 +52,10 @@ class WebSecScanner:
             print(f"Error crawling {url}: {str(e)}")
         
         
+        """
+        Crawl function implements depth first crawl of a website. It will explore
+        all explore pages of a website while staying within the specified domain.
+        """
+        
+        
+        
