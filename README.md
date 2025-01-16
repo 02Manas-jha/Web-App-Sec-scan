@@ -13,3 +13,8 @@ A Python-based web security scanner that identifies vulnerabilities such as **SQ
 
 ---
 
+# How To install and run
+
+pip install -r requirements.txt
+
+run the scanner using command - python scanner.py "the URL you want to scan"
